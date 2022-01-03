@@ -7,7 +7,7 @@ on:
 jobs:
   assign-author:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.event.action == 'opened' && github.actor != 'dependabot-preview[bot]' && github.actor != 'struqtur-bot' && github.event.pull_request.assignees[0] == null
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot-preview[bot]' && github.actor != 'struqtur-bot' && github.event.pull_request.assignees[0] == null
     steps:
       - uses: samspills/assign-pr-to-author@v1.0
         with:
