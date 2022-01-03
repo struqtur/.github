@@ -1,0 +1,57 @@
+name: Struqtur github tools
+on:
+  workflow_call:
+  pull_request:
+      
+
+jobs:
+  assign-author:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'opened' && github.actor != 'dependabot-preview[bot]' && github.actor != 'struqtur-bot' && github.event.pull_request.assignees[0] == null
+    steps:
+      - uses: samspills/assign-pr-to-author@v1.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+  autocancel:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: fauguste/auto-cancellation-running-action@0.1.4
+        with:
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+
+  check-git-hygiene:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: octokit/request-action@v2.x
+        id: get-pr-commits
+        with:
+          route: GET /repos/{repo}/pulls/{pull_number}/commits
+          repo: ${{ github.repository }}
+          pull_number: ${{ github.event.number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check git log
+        env:
+          COMMIT_DATA: ${{ steps.get-pr-commits.outputs.data }}
+        run: |
+          COMMIT_LIST=$(echo "$COMMIT_DATA" | jq -c '.[] | {sha: .sha, message: .commit.message}')
+
+          bad_commits=()
+          while read -r commit; do
+            message=$(echo "$commit" | jq '.message')
+            if [[ "$message" != *"Revert"* && "$message" =~ .*(fixup!|squash!|Merge branch|Merge pull request).* ]]; then
+              bad_commits+=("$commit")
+            fi
+          done <<< "$COMMIT_LIST"
+
+          if (( ${#bad_commits[@]} )); then
+            echo "Bad commits found:"
+            for commit in "${bad_commits[@]}"; do
+              echo "$commit" | jq -r '[.sha, .message] | @tsv'
+            done
+            exit 1
+          fi
